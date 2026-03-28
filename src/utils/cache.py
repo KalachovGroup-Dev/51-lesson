@@ -239,3 +239,92 @@ class ChatCache:
                 "tokens_used": row[5]      # Использовано токенов
             })
         return history  # Возврат форматированной истории
+
+# Класс для модели ключей пользователя
+class AuthCache:
+    def __init__(self):
+        """
+        Инициализация файла кеша.
+        """
+        # Имя файла SQLite базы данных
+        self.db_name = 'chat_cache.db'
+        self.local = threading.local()
+        self.create_tables()
+
+    def get_connection(self):
+        """
+        Получение соединения с базой данных для текущего потока.
+        
+        Returns:
+            sqlite3.Connection: Объект соединения с базой данных
+            
+        Note:
+            Каждый поток получает свое собственное соединение,
+            что обеспечивает потокобезопасность работы с базой.
+        """
+        # Проверяем, есть ли уже соединение в текущем потоке
+        if not hasattr(self.local, 'connection'):
+            # Если соединения нет - создаем новое
+            self.local.connection = sqlite3.connect(self.db_name)
+        return self.local.connection
+    
+    def create_tables(self):
+        """
+        Создание необходимых таблиц в базе данных.
+        
+        Создает таблицу sessions со следующими полями:
+        - api_key: ключ
+        - pin: сгенерированный пин-код
+        """
+        # Создаем новое соединение с базой
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # Создаем таблицу для хранения ключа и пин-кода
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS sessions (
+                api_key TEXT NOT NULL,
+                pin TEXT NOT NULL
+            )
+        ''')
+        
+        conn.commit()  # Сохранение изменений в базе
+        conn.close()   # Закрытие соединения
+
+    def get(self):
+        """
+        Получение ключа.
+                
+        Returns:
+            tuple: Кортеж с ключом и кодом
+        """
+        conn = self.get_connection()  # Получение соединения для текущего потока
+        cursor = conn.cursor()
+            
+        cursor.execute('SELECT api_key, pin FROM sessions LIMIT 1')
+        result = cursor.fetchone()
+
+        if result:
+            return (result[0], result[1])  # возвращаем кортеж (api_key, pin)
+        else:
+            return (None, None)
+        
+    def set(self, api_key, pin):
+        """Сохраняет ключ и PIN"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM sessions')  # очищаем
+        cursor.execute('INSERT INTO sessions (api_key, pin) VALUES (?, ?)', 
+                      (api_key, pin))
+        conn.commit()
+
+    def check_pin(self, pin):
+        _, stored_pin = self.get()
+        return stored_pin == pin
+
+    def clear(self):
+        """Удаляет сессию"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM sessions')
+        conn.commit()

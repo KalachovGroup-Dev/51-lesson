@@ -40,7 +40,10 @@ class OpenRouterClient:
             # Логирование критической ошибки
             self.logger.error("OpenRouter API key not found in .env")
             # Выбрасывание исключения с понятным сообщением
-            raise ValueError("OpenRouter API key not found in .env")
+            # raise ValueError("OpenRouter API key not found in .env")
+
+            # Исправление
+            self.api_key = None
 
         # Настройка заголовков для всех API запросов
         self.headers = {
@@ -147,7 +150,7 @@ class OpenRouterClient:
             # Возврат сообщения об ошибке в формате ответа API
             return {"error": str(e)}       
 
-    def get_balance(self):
+    def get_balance(self, as_string=True):
         """
         Получение текущего баланса аккаунта.
         
@@ -165,7 +168,11 @@ class OpenRouterClient:
             if data:
                 data = data.get('data')
                 # Вычисление доступного баланса (всего кредитов минус использовано)
-                return f"${(data.get('total_credits', 0)-data.get('total_usage', 0)):.2f}"
+                if data is not None:
+                    balance = data.get('total_credits', 0) - data.get('total_usage', 0)
+                    if as_string:
+                        return f"${balance:.2f}"
+                    return balance
             return "Ошибка"
         except Exception as e:
             # Формирование сообщения об ошибке
